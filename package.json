@@ -9,6 +9,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "csv": "^6.3.10"
+    "csv": "^6.3.10",
+    "md-to-pdf": "^5.2.4"
   }
 }

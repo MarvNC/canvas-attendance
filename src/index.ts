@@ -2,10 +2,12 @@ import fs from "node:fs";
 import { stringify, generate, parse } from "csv";
 // import path
 import path from "node:path";
+import mdToPdf from "md-to-pdf";
 
 const CRN_REGEX = /CRN (\d+)/g;
 const IGNORE_NAMES = ["Student, Test"];
 const OUT_FOLDER = `output`;
+const WIDTH_SIGNATURE_COL = 135;
 
 const gradesCsvPath = Bun.argv[2];
 if (!gradesCsvPath) {
@@ -48,6 +50,8 @@ async function processFile(filePath: string) {
 
 const records = await processFile(gradesCsvPathStr);
 
+// Create md files
+const mdFiles = [];
 for (const [CRN, students] of records) {
   // Create an `attendance-${CRN}.md` file for each section
   // const fileName = `attendance-${CRN}.md`;
@@ -61,8 +65,20 @@ for (const [CRN, students] of records) {
     if (IGNORE_NAMES.includes(student)) {
       continue;
     }
-    mdString += `| ${student} | |\n`;
+    const spaces = "&nbsp;".repeat(WIDTH_SIGNATURE_COL);
+    mdString += `| ${student} | ${spaces} |\n`;
   }
 
   Bun.write(fileName, mdString);
+  console.log(`Generated ${fileName}`);
+  mdFiles.push(fileName);
+}
+
+// Generate PDFs
+for (const mdFile of mdFiles) {
+  // Read the markdown file
+  const mdContent = await Bun.file(mdFile).text();
+  const pdfName = mdFile.replace(".md", ".pdf");
+  await mdToPdf({ content: mdContent }, { dest: pdfName });
+  console.log(`Generated ${pdfName}`);
 }
