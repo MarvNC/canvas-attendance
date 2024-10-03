@@ -1,5 +1,11 @@
 import fs from "node:fs";
-import { parse } from "csv-parse";
+import { stringify, generate, parse } from "csv";
+// import path
+import path from "node:path";
+
+const CRN_REGEX = /CRN (\d+)/g;
+const IGNORE_NAMES = ["Student, Test"];
+const OUT_FOLDER = `output`;
 
 const gradesCsvPath = Bun.argv[2];
 if (!gradesCsvPath) {
@@ -9,21 +15,54 @@ if (!gradesCsvPath) {
 
 const gradesCsvPathStr = gradesCsvPath as string;
 
-const processFile = async (filePath: string) => {
-  const records: any[] = [];
+async function processFile(filePath: string) {
+  const sections = new Map<string, Set<string>>();
   const parser = fs.createReadStream(filePath).pipe(
     parse({
-      // CSV options if any
+      columns: true,
     })
   );
   for await (const record of parser) {
-    // Work with each record
-    records.push(record);
+    const sectionText = record["Section"];
+    if (!sectionText) {
+      continue;
+    }
+    const CRNs = [...sectionText.matchAll(CRN_REGEX)].map((match) => match[1]);
+    if (CRNs.length === 0) {
+      continue;
+    }
+    const student = record["Student"];
+    for (const CRN of CRNs) {
+      const section = sections.get(CRN);
+      if (section) {
+        section.add(student);
+      } else {
+        const newSection = new Set<string>();
+        newSection.add(student);
+        sections.set(CRN, newSection);
+      }
+    }
   }
-  return records;
-};
+  return sections;
+}
 
-(async () => {
-  const records = await processFile(gradesCsvPathStr);
-  console.info(records);
-})();
+const records = await processFile(gradesCsvPathStr);
+
+for (const [CRN, students] of records) {
+  // Create an `attendance-${CRN}.md` file for each section
+  // const fileName = `attendance-${CRN}.md`;
+  const fileName = path.join(OUT_FOLDER, `attendance-${CRN}.md`);
+
+  let mdString = `# Attendance for CRN ${CRN}\n\n`;
+  // Table headers
+  mdString += `| Student | Signature |\n| --- | --- |\n`;
+  // Table rows
+  for (const student of students) {
+    if (IGNORE_NAMES.includes(student)) {
+      continue;
+    }
+    mdString += `| ${student} | |\n`;
+  }
+
+  Bun.write(fileName, mdString);
+}
